@@ -120,6 +120,14 @@
     },
     "socialPinterestUrl": {
       "type": "string"
+    },
+    "liveTvUrl": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
     }
   }
 }
