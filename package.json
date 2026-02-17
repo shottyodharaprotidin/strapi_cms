@@ -18,15 +18,17 @@
   "dependencies": {
     "@strapi/plugin-cloud": "5.35.0",
     "@strapi/plugin-users-permissions": "5.35.0",
-    "@strapi/provider-upload-aws-s3": "^5.36.0",
     "@strapi/strapi": "5.35.0",
     "better-sqlite3": "^12.6.2",
     "fs-extra": "^10.0.0",
+    "ioredis": "^5.9.3",
+    "koa-compress": "^5.2.0",
     "mime-types": "^2.1.27",
     "pg": "8.8.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.0.0",
+    "strapi-plugin-redis": "^1.1.0",
     "styled-components": "^6.0.0"
   },
   "devDependencies": {

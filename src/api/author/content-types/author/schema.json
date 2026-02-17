@@ -16,17 +16,44 @@
       "type": "string",
       "required": true
     },
+    "display_name": {
+      "type": "string",
+      "required": true
+    },
+    "Slug": {
+      "type": "uid",
+      "targetField": "display_name",
+      "required": true
+    },
     "email": {
       "type": "email"
     },
-    "picture": {
+    "Avatar": {
       "type": "media",
       "multiple": false,
       "required": false,
-      "allowedTypes": ["images"]
+      "allowedTypes": [
+        "images"
+      ]
     },
     "bio": {
-      "type": "text"
+      "type": "text",
+      "default": "সত্যধারা প্রতিদিনের অফিসিয়াল নিউজ ডেস্ক।"
+    },
+    "role": {
+      "type": "enumeration",
+      "default": "editorial",
+      "enum": [
+        "editorial",
+        "staff",
+        "bureau",
+        "guest",
+        "agency"
+      ]
+    },
+    "is_public": {
+      "type": "boolean",
+      "default": false
     },
     "articles": {
       "type": "relation",
@@ -36,4 +63,3 @@
     }
   }
 }
-

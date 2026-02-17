@@ -1,0 +1,53 @@
+{
+  "kind": "singleType",
+  "collectionName": "footers",
+  "info": {
+    "singularName": "footer",
+    "pluralName": "footers",
+    "displayName": "Footer"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "logo": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "newsletterText": {
+      "type": "string"
+    },
+    "appQrImage": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "appDescription": {
+      "type": "string"
+    },
+    "privacyLink": {
+      "type": "string"
+    },
+    "contactLink": {
+      "type": "string"
+    },
+    "aboutLink": {
+      "type": "string"
+    },
+    "donationLink": {
+      "type": "string"
+    },
+    "faqLink": {
+      "type": "string"
+    }
+  }
+}

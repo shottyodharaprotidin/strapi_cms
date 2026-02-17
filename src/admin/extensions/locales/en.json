@@ -1,0 +1,8 @@
+{
+  "app.containers.AuthPage.Head.title": "Welcome to Admin Portal",
+  "app.containers.AuthPage.Head.description": "Log in to your Account",
+  "app.components.AuthPage.Head.title": "Welcome to Admin Portal",
+  "app.components.AuthPage.Head.subtitle": "Log in to your Account",
+  "Auth.form.welcome.title": "Welcome to Admin Portal",
+  "Auth.form.welcome.subtitle": "Log in to your Account"
+}
