@@ -1,5 +1,11 @@
 export default [
   'strapi::logger',
+  {
+    name: 'strapi::compression',
+    config: {
+      threshold: 1024,
+    },
+  },
   'strapi::errors',
   {
     name: 'strapi::security',
@@ -13,16 +19,12 @@ export default [
             'data:',
             'blob:',
             'market-assets.strapi.io',
-            'shottyodharaprotidin-media.s3.ap-southeast-2.amazonaws.com',
-            'media.shottyodharaprotidin.com',
           ],
           'media-src': [
             "'self'",
             'data:',
             'blob:',
             'market-assets.strapi.io',
-            'shottyodharaprotidin-media.s3.ap-southeast-2.amazonaws.com',
-            'media.shottyodharaprotidin.com',
           ],
           upgradeInsecureRequests: null,
         },
