@@ -58,7 +58,7 @@ export default factories.createCoreController('api::newsletter.newsletter', ({ s
     };
 
     try {
-      const entry = await strapi.entityService.create('api::newsletter.newsletter', {
+      const entry = await strapi.documents('api::newsletter.newsletter').create({
         data: payload,
       });
 
