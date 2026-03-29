@@ -1,3 +1,5 @@
+import path from 'path';
+
 export default ({ env }) => ({
   ckeditor5: {
     enabled: true,
@@ -34,16 +36,16 @@ export default ({ env }) => ({
       enabledCollections: ['api::article.article'],
     },
   },
-  // Email plugin with AWS SES provider
+  // Email plugin with AWS SES — uses local provider (AWS SDK v3, no node-ses)
   // Only activates when AWS credentials are set in .env
   ...(env('AWS_SES_ACCESS_KEY_ID') ? {
     email: {
       config: {
-        provider: '@strapi/provider-email-amazon-ses',
+        provider: path.resolve(process.cwd(), 'src/extensions/email-ses'),
         providerOptions: {
           key: env('AWS_SES_ACCESS_KEY_ID'),
           secret: env('AWS_SES_SECRET_ACCESS_KEY'),
-          amazon: `https://email.${env('AWS_SES_REGION', 'ap-southeast-1')}.amazonaws.com`,
+          region: env('AWS_SES_REGION', 'ap-southeast-1'),
         },
         settings: {
           defaultFrom: env('AWS_SES_DEFAULT_FROM', 'noreply@shottyodharaprotidin.com'),
@@ -58,8 +60,21 @@ export default ({ env }) => ({
   publisher: {
     enabled: true,
   },
+  // Redis is enabled automatically when REDIS_HOST is set in .env (i.e. in production)
   redis: {
-    enabled: false,
+    enabled: !!env('REDIS_HOST'),
+    config: {
+      connections: {
+        default: {
+          connection: {
+            host: env('REDIS_HOST', '127.0.0.1'),
+            port: env.int('REDIS_PORT', 6379),
+            db: env.int('REDIS_DB', 0),
+            ...(env('REDIS_PASSWORD') ? { password: env('REDIS_PASSWORD') } : {}),
+          },
+        },
+      },
+    },
   },
   'webp-converter': {
     enabled: false, // Disabled due to Windows PNG upload crash issues

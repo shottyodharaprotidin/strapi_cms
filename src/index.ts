@@ -1,5 +1,228 @@
 import type { Core } from '@strapi/strapi';
 
+const HEADER_UID = 'api::header.header';
+
+const VALID_MENU_SUFFIXES = new Set([
+  'base-link',
+  'menu-button',
+  'dropdown-menu',
+  'dropdown-header',
+  'nested-dropdown',
+  'mega-menu',
+  'video-menu',
+]);
+
+function normalizeMenuComponent(component: unknown) {
+  if (typeof component !== 'string') {
+    return component;
+  }
+
+  const trimmedComponent = component.trim();
+  const suffix = trimmedComponent.split('.').pop();
+
+  if (suffix && VALID_MENU_SUFFIXES.has(suffix)) {
+    return `navigation.${suffix}`;
+  }
+
+  return trimmedComponent;
+}
+
+function normalizeMenuUrl(value: unknown) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmedValue = value.trim();
+  if (!trimmedValue || trimmedValue === '#') {
+    return '#';
+  }
+
+  if (/^https?:\/\//i.test(trimmedValue)) {
+    return trimmedValue;
+  }
+
+  return trimmedValue.replace(/\s+/g, '');
+}
+
+function normalizeBooleanFlag(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return ['true', '1', 'yes', 'on'].includes(normalized);
+  }
+  return false;
+}
+
+function normalizeMenuNode(node: any): { node: any; changed: boolean } {
+  if (!node || typeof node !== 'object') {
+    return { node, changed: false };
+  }
+
+  let changed = false;
+  const output: any = { ...node };
+
+  const normalizedComponent = normalizeMenuComponent(output.__component);
+  if (normalizedComponent !== output.__component) {
+    output.__component = normalizedComponent;
+    changed = true;
+  }
+
+  const normalizedUrl = normalizeMenuUrl(output.url);
+  if (normalizedUrl !== output.url) {
+    output.url = normalizedUrl;
+    changed = true;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(output, 'slug')) {
+    const normalizedSlug = normalizeMenuUrl(output.slug);
+    if (normalizedSlug !== output.slug) {
+      output.slug = normalizedSlug;
+      changed = true;
+    }
+  }
+
+  const typoFlag = output.oopenInNewTab ?? output.openInNeewTab;
+  if (typoFlag !== undefined || output.openInNewTab !== undefined) {
+    const normalizedOpenInNewTab = normalizeBooleanFlag(
+      output.openInNewTab ?? typoFlag
+    );
+
+    if (output.openInNewTab !== normalizedOpenInNewTab) {
+      output.openInNewTab = normalizedOpenInNewTab;
+      changed = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(output, 'oopenInNewTab')) {
+      delete output.oopenInNewTab;
+      changed = true;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(output, 'openInNeewTab')) {
+      delete output.openInNeewTab;
+      changed = true;
+    }
+  }
+
+  if (Array.isArray(output.subMenus)) {
+    const nextSubMenus = output.subMenus.map((child: any) => normalizeMenuNode(child));
+    if (nextSubMenus.some((item) => item.changed)) {
+      output.subMenus = nextSubMenus.map((item) => item.node);
+      changed = true;
+    }
+  }
+
+  if (Array.isArray(output.sections)) {
+    const nextSections = output.sections.map((section: any) => {
+      let sectionChanged = false;
+      const normalizedSection = { ...section };
+
+      if (Array.isArray(section?.links)) {
+        const normalizedLinks = section.links.map((link: any) => normalizeMenuNode(link));
+        if (normalizedLinks.some((item) => item.changed)) {
+          normalizedSection.links = normalizedLinks.map((item) => item.node);
+          sectionChanged = true;
+        }
+      }
+
+      return { node: normalizedSection, changed: sectionChanged };
+    });
+
+    if (nextSections.some((item) => item.changed)) {
+      output.sections = nextSections.map((item) => item.node);
+      changed = true;
+    }
+  }
+
+  if (Array.isArray(output.videos)) {
+    const nextVideos = output.videos.map((video: any) => normalizeMenuNode(video));
+    if (nextVideos.some((item) => item.changed)) {
+      output.videos = nextVideos.map((item) => item.node);
+      changed = true;
+    }
+  }
+
+  return { node: output, changed };
+}
+
+async function sanitizeHeaderSingletonData(strapi: Core.Strapi) {
+  const headers = await strapi.documents(HEADER_UID as any).findMany({
+    fields: ['documentId', 'locale'],
+    populate: {
+      menu: { populate: '*' },
+      mobileMenu: { populate: '*' },
+    },
+    status: 'published',
+  } as any);
+
+  let updatedCount = 0;
+
+  for (const entry of headers || []) {
+    const normalizedMenu = Array.isArray(entry.menu)
+      ? entry.menu.map((item: any) => normalizeMenuNode(item))
+      : [];
+
+    const normalizedMobileMenu = Array.isArray(entry.mobileMenu)
+      ? entry.mobileMenu.map((item: any) => normalizeMenuNode(item))
+      : [];
+
+    const menuChanged = normalizedMenu.some((item: any) => item.changed);
+    const mobileMenuChanged = normalizedMobileMenu.some((item: any) => item.changed);
+
+    if (!menuChanged && !mobileMenuChanged) {
+      continue;
+    }
+
+    await strapi.documents(HEADER_UID as any).update({
+      documentId: entry.documentId,
+      locale: entry.locale,
+      status: 'published',
+      data: {
+        menu: normalizedMenu.map((item: any) => item.node),
+        mobileMenu: normalizedMobileMenu.map((item: any) => item.node),
+      },
+    } as any);
+
+    updatedCount += 1;
+  }
+
+  if (updatedCount > 0) {
+    strapi.log.info(`Header sanitizer: normalized ${updatedCount} header locale entries.`);
+  } else {
+    strapi.log.info('Header sanitizer: no malformed header entries found.');
+  }
+}
+
+async function verifyRecentReviewAvailability(strapi: Core.Strapi) {
+  try {
+    const recentReviewEntries = await strapi.documents('api::article.article' as any).findMany({
+      fields: ['documentId'],
+      filters: {
+        isRecentReview: {
+          $eq: true,
+        },
+      },
+      pagination: {
+        page: 1,
+        pageSize: 1,
+      },
+      status: 'published',
+    } as any);
+
+    const hasRecentReview = Array.isArray(recentReviewEntries) && recentReviewEntries.length > 0;
+
+    if (hasRecentReview) {
+      strapi.log.info('Recent review verification: at least one published article has isRecentReview=true.');
+      return;
+    }
+
+    strapi.log.warn('Recent review verification: no published article has isRecentReview=true. Recent Reviews section may appear empty.');
+  } catch {
+    strapi.log.warn('Recent review verification could not be completed.');
+  }
+}
+
 export default {
   /**
    * An asynchronous register function that runs before
@@ -57,7 +280,7 @@ export default {
    * This gives you an opportunity to set up your data model,
    * run jobs, or perform some special logic.
    */
-  bootstrap({ strapi }: { strapi: Core.Strapi }) {
+  async bootstrap({ strapi }: { strapi: Core.Strapi }) {
     strapi.db.lifecycles.subscribe({
       models: ['plugin::comments.comment'],
       async beforeUpdate(event) {
@@ -135,6 +358,14 @@ export default {
         }
       },
     });
+
+    try {
+      await sanitizeHeaderSingletonData(strapi);
+    } catch (error) {
+      strapi.log.warn('Header sanitizer failed to run cleanly.');
+    }
+
+    await verifyRecentReviewAvailability(strapi);
 
     const redisEnabled = ['true', '1', 'yes', 'on'].includes((process.env.REDIS_ENABLED || '').toLowerCase());
 
