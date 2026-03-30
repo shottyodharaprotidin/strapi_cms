@@ -121,6 +121,118 @@ export default {
   config,
   register(app) {
     document.title = 'Shottyodhara Protidin Admin';
+    
+    // Create style tag with extreme priority
+    const createAndInjectStyles = () => {
+      if (document.getElementById('strapi-label-fix-css')) {
+        return; // Already injected
+      }
+      
+      const style = document.createElement('style');
+      style.id = 'strapi-label-fix-css';
+      style.textContent = `
+        /* Maximum specificity - override everything */
+        html label {
+          font-size: 14px !important;
+          line-height: 1.5 !important;
+          font-weight: 600 !important;
+          letter-spacing: 0 !important;
+          display: inline-block !important;
+          min-height: auto !important;
+        }
+        
+        body label {
+          font-size: 14px !important;
+          line-height: 1.5 !important;
+          font-weight: 600 !important;
+        }
+        
+        /* Target Strapi's field label wrappers */
+        [role="main"] label,
+        [class*="Box"] label,
+        [class*="Flex"] label {
+          font-size: 14px !important;
+          line-height: 1.5 !important;
+          font-weight: 600 !important;
+        }
+        
+        /* Override inline styles for labels */
+        label[style*="font-size: 12px"],
+        label[style*="font-size: 13px"] {
+          font-size: 14px !important;
+        }
+      `;
+      document.head.insertBefore(style, document.head.firstChild);
+    };
+    
+    // Inject styles immediately
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', createAndInjectStyles);
+    } else {
+      createAndInjectStyles();
+    }
+    
+    // Also inject inline styles directly to all labels using MutationObserver
+    const fixLabelSizes = (nodeList) => {
+      if (!nodeList || !nodeList.forEach) return;
+      
+      nodeList.forEach(node => {
+        if (node.tagName === 'LABEL') {
+          // Remove all font-size related styles and set new one
+          node.style.removeProperty('font-size');
+          node.style.setProperty('font-size', '14px', 'important');
+          node.style.setProperty('line-height', '1.5', 'important');
+          node.style.setProperty('font-weight', '600', 'important');
+          node.style.setProperty('letter-spacing', '0', 'important');
+        }
+        // Recurse into children
+        if (node.childNodes && node.childNodes.length > 0) {
+          fixLabelSizes(node.childNodes);
+        }
+      });
+    };
+    
+    // Run on all current labels
+    setTimeout(() => {
+      fixLabelSizes(document.querySelectorAll('label'));
+    }, 100);
+    
+    setTimeout(() => {
+      fixLabelSizes(document.querySelectorAll('label'));
+    }, 1000);
+    
+    // Watch for new labels being added
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+          mutation.addedNodes.forEach((node) => {
+            if (node.tagName === 'LABEL') {
+              node.style.setProperty('font-size', '14px', 'important');
+              node.style.setProperty('line-height', '1.5', 'important');
+              node.style.setProperty('font-weight', '600', 'important');
+            }
+            // Check if any descendants are labels
+            if (node.querySelectorAll) {
+              node.querySelectorAll('label').forEach((label) => {
+                label.style.setProperty('font-size', '14px', 'important');
+                label.style.setProperty('line-height', '1.5', 'important');
+                label.style.setProperty('font-weight', '600', 'important');
+              });
+            }
+          });
+        }
+      });
+    });
+    
+    // Start observing
+    setTimeout(() => {
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: false,
+      });
+    }, 500);
+    
     setPluginConfig({
       presets: [ckeditorDefaultHtmlPreset],
     });
@@ -128,14 +240,6 @@ export default {
     app.customFields.register({
       name: 'tag-picker',
       type: 'string',
-      intlLabel: {
-        id: 'global.tag-picker.label',
-        defaultMessage: 'Tags',
-      },
-      intlDescription: {
-        id: 'global.tag-picker.description',
-        defaultMessage: 'Search existing tags or create new ones by typing',
-      },
       components: {
         Input: async () => import('./extensions/TagPickerInput'),
       },

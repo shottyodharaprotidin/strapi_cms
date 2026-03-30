@@ -95,7 +95,7 @@
     },
     "tagsInput": {
       "type": "customField",
-      "displayName": "Tags",
+      "displayName": "Tags ট্যাগ",
       "pluginOptions": {
         "i18n": {
           "localized": true
