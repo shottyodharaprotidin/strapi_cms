@@ -13,7 +13,7 @@
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
 module.exports = {
-  init({ key, secret, region = 'ap-southeast-1' }) {
+  init({ key, secret, region = 'ap-southeast-1', defaultFrom, defaultReplyTo }) {
     const client = new SESClient({
       region,
       credentials: {
@@ -24,10 +24,16 @@ module.exports = {
 
     return {
       async send({ from, to, cc, bcc, replyTo, subject, text, html }) {
+        const source = from || defaultFrom;
+        const replyToAddresses = replyTo || defaultReplyTo;
         const toAddresses = Array.isArray(to) ? to : [to];
 
+        if (!source) {
+          throw new Error('SES provider missing sender email. Set AWS_SES_DEFAULT_FROM or pass from in send().');
+        }
+
         const params = {
-          Source: from,
+          Source: source,
           Destination: {
             ToAddresses: toAddresses,
             ...(cc ? { CcAddresses: Array.isArray(cc) ? cc : [cc] } : {}),
@@ -40,8 +46,8 @@ module.exports = {
               ...(text ? { Text: { Charset: 'UTF-8', Data: text } } : {}),
             },
           },
-          ...(replyTo
-            ? { ReplyToAddresses: Array.isArray(replyTo) ? replyTo : [replyTo] }
+          ...(replyToAddresses
+            ? { ReplyToAddresses: Array.isArray(replyToAddresses) ? replyToAddresses : [replyToAddresses] }
             : {}),
         };
 

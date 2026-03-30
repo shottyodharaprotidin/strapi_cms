@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const TagPickerInput = ({ name, value, onChange, disabled, error }) => {
+const TagPickerInput = ({ name, value, onChange, disabled, error, label, intlLabel, attribute }) => {
   const [selectedTags, setSelectedTags] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [allTags, setAllTags] = useState([]);
@@ -130,6 +130,13 @@ const TagPickerInput = ({ name, value, onChange, disabled, error }) => {
     !selectedTags.some((t) => t.toLowerCase() === inputValue.trim().toLowerCase());
 
   const borderColor = error ? '#d02b20' : showDropdown ? '#4945ff' : '#32324d';
+  const fieldLabel =
+    label ||
+    attribute?.label ||
+    attribute?.displayName ||
+    intlLabel?.defaultMessage ||
+    name ||
+    'Tags';
 
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
@@ -142,7 +149,7 @@ const TagPickerInput = ({ name, value, onChange, disabled, error }) => {
           lineHeight: 1.33,
         }}
       >
-        Tags
+        {fieldLabel}
       </div>
 
       {/* Tag chips + text input */}

@@ -46,6 +46,8 @@ export default ({ env }) => ({
           key: env('AWS_SES_ACCESS_KEY_ID'),
           secret: env('AWS_SES_SECRET_ACCESS_KEY'),
           region: env('AWS_SES_REGION', 'ap-southeast-1'),
+          defaultFrom: env('AWS_SES_DEFAULT_FROM', 'noreply@shottyodharaprotidin.com'),
+          defaultReplyTo: env('AWS_SES_DEFAULT_REPLY_TO', env('AWS_SES_DEFAULT_FROM', 'noreply@shottyodharaprotidin.com')),
         },
         settings: {
           defaultFrom: env('AWS_SES_DEFAULT_FROM', 'noreply@shottyodharaprotidin.com'),
