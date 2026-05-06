@@ -1,6 +1,14 @@
 export default ({ env }) => ({
   auth: {
     secret: env('ADMIN_JWT_SECRET'),
+    // Increase login rate limit for local dev/seeding
+    options: {
+      expiresIn: env('ADMIN_JWT_EXPIRES_IN', '30d'),
+    },
+  },
+  rateLimit: {
+    max: 1000,
+    interval: { month: 1 },
   },
 
   apiToken: {
@@ -36,4 +44,8 @@ export default ({ env }) => ({
   },
   // Required for production admin URL
   url: env('STRAPI_ADMIN_URL', '/admin'),
+  // Disable AI features (requires Strapi Cloud EE license — causes 500 on image upload without one)
+  ai: {
+    enabled: false,
+  },
 });

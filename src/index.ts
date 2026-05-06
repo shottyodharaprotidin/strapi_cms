@@ -1,4 +1,5 @@
 import type { Core } from '@strapi/strapi';
+import { isAutoTranslateEnabled, translateArticle, translateFields, slugify } from './services/auto-translate.js';
 
 const HEADER_UID = 'api::header.header';
 
@@ -281,6 +282,33 @@ export default {
    * run jobs, or perform some special logic.
    */
   async bootstrap({ strapi }: { strapi: Core.Strapi }) {
+    const uploadSettingsStore = strapi.store({
+      type: 'plugin',
+      name: 'upload',
+      key: 'settings',
+    });
+
+    const storedUploadSettings = await uploadSettingsStore.get({});
+    const currentUploadSettings =
+      storedUploadSettings && typeof storedUploadSettings === 'object' && !Array.isArray(storedUploadSettings)
+        ? (storedUploadSettings as Record<string, unknown>)
+        : {};
+    const desiredUploadSettings = {
+      ...currentUploadSettings,
+      sizeOptimization: true,
+      responsiveDimensions: true,
+      autoOrientation: true,
+      aiMetadata: false,
+    };
+
+    if (JSON.stringify(currentUploadSettings) !== JSON.stringify(desiredUploadSettings)) {
+      await uploadSettingsStore.set({ value: desiredUploadSettings });
+      strapi.log.info('Upload optimization defaults applied');
+    }
+
+    const commentsPluginEnabled = strapi.plugin('comments') !== undefined;
+
+    if (commentsPluginEnabled) {
     strapi.db.lifecycles.subscribe({
       models: ['plugin::comments.comment'],
       async beforeUpdate(event) {
@@ -359,6 +387,8 @@ export default {
       },
     });
 
+    } // end if commentsPluginEnabled
+
     try {
       await sanitizeHeaderSingletonData(strapi);
     } catch (error) {
@@ -377,5 +407,303 @@ export default {
     }
 
     strapi.log.info('Redis: disabled (set REDIS_ENABLED=true to enable)');
+
+    // -------------------------------------------------------------------------
+    // Auto-translate: bn-BD content → English locale on create/update
+    // Covers: articles, categories, authors, and all i18n page types
+    // Enable via GOOGLE_TRANSLATE_API_KEY + AUTO_TRANSLATE_ENABLED=true in .env
+    // -------------------------------------------------------------------------
+    if (isAutoTranslateEnabled()) {
+      strapi.log.info('Auto-translate: enabled (Google Cloud Translation API)');
+
+      // ── Articles ────────────────────────────────────────────────────────────
+      strapi.db.lifecycles.subscribe({
+        models: ['api::article.article'],
+        async afterCreate(event) {
+          const locale: string = event?.result?.locale || '';
+          const publishedAt: string | null = event?.result?.publishedAt || null;
+          if (locale !== 'bn-BD' || !publishedAt) return;
+          await autoTranslateArticleToEnglish(strapi, event.result);
+        },
+        async afterUpdate(event) {
+          const locale: string = event?.result?.locale || '';
+          const publishedAt: string | null = event?.result?.publishedAt || null;
+          if (locale !== 'bn-BD' || !publishedAt) return;
+          await autoTranslateArticleToEnglish(strapi, event.result);
+        },
+      });
+
+      // ── Categories ──────────────────────────────────────────────────────────
+      strapi.db.lifecycles.subscribe({
+        models: ['api::category.category'],
+        async afterCreate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::category.category', event.result.documentId, 'bn-BD', {
+            textFields: ['name', 'description'],
+            slugSourceField: 'name',
+          });
+        },
+        async afterUpdate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::category.category', event.result.documentId, 'bn-BD', {
+            textFields: ['name', 'description'],
+            slugSourceField: 'name',
+          });
+        },
+      });
+
+      // ── Authors ─────────────────────────────────────────────────────────────
+      strapi.db.lifecycles.subscribe({
+        models: ['api::author.author'],
+        async afterCreate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::author.author', event.result.documentId, 'bn-BD', {
+            textFields: ['name', 'display_name', 'bio'],
+            slugSourceField: 'display_name',
+            slugField: 'Slug',
+          });
+        },
+        async afterUpdate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::author.author', event.result.documentId, 'bn-BD', {
+            textFields: ['name', 'display_name', 'bio'],
+            slugSourceField: 'display_name',
+            slugField: 'Slug',
+          });
+        },
+      });
+
+      // ── About page ──────────────────────────────────────────────────────────
+      strapi.db.lifecycles.subscribe({
+        models: ['api::about.about'],
+        async afterCreate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::about.about', event.result.documentId, 'bn-BD', {
+            textFields: ['title', 'heroDescription', 'missionTitle', 'missionSubtitle', 'teamSectionTitle', 'historyTitle'],
+          });
+        },
+        async afterUpdate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::about.about', event.result.documentId, 'bn-BD', {
+            textFields: ['title', 'heroDescription', 'missionTitle', 'missionSubtitle', 'teamSectionTitle', 'historyTitle'],
+          });
+        },
+      });
+
+      // ── Privacy Policy page ─────────────────────────────────────────────────
+      strapi.db.lifecycles.subscribe({
+        models: ['api::privacy-policy.privacy-policy'],
+        async afterCreate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::privacy-policy.privacy-policy', event.result.documentId, 'bn-BD', {
+            textFields: ['title', 'heroDescription'],
+            htmlFields: ['content'],
+          });
+        },
+        async afterUpdate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::privacy-policy.privacy-policy', event.result.documentId, 'bn-BD', {
+            textFields: ['title', 'heroDescription'],
+            htmlFields: ['content'],
+          });
+        },
+      });
+
+      // ── Not Found page ──────────────────────────────────────────────────────
+      strapi.db.lifecycles.subscribe({
+        models: ['api::not-found.not-found'],
+        async afterCreate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::not-found.not-found', event.result.documentId, 'bn-BD', {
+            textFields: ['notFoundTitle', 'notFoundSubtitle', 'notFoundButtonLabel'],
+          });
+        },
+        async afterUpdate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::not-found.not-found', event.result.documentId, 'bn-BD', {
+            textFields: ['notFoundTitle', 'notFoundSubtitle', 'notFoundButtonLabel'],
+          });
+        },
+      });
+
+      // ── Global settings ─────────────────────────────────────────────────────
+      strapi.db.lifecycles.subscribe({
+        models: ['api::global.global'],
+        async afterCreate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::global.global', event.result.documentId, 'bn-BD', {
+            textFields: ['siteName', 'siteDescription'],
+          });
+        },
+        async afterUpdate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::global.global', event.result.documentId, 'bn-BD', {
+            textFields: ['siteName', 'siteDescription'],
+          });
+        },
+      });
+
+      // ── Footer ───────────────────────────────────────────────────────────────
+      strapi.db.lifecycles.subscribe({
+        models: ['api::footer.footer'],
+        async afterCreate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::footer.footer', event.result.documentId, 'bn-BD', {
+            textFields: [
+              'description', 'newsletterText', 'appDescription',
+              'newsletterPlaceholder', 'newsletterButtonText',
+              'categoryTitle', 'recentPostTitle', 'copyrightText',
+              'socialTitle', 'editorialName', 'editorialOffice',
+              'editorialAddress1', 'editorialAddress2', 'editorialPhone',
+              'editorialEmail', 'editorialEditor', 'editorialPublisher',
+              'noMenuItemsText',
+            ],
+          });
+        },
+        async afterUpdate(event) {
+          if (event?.result?.locale !== 'bn-BD') return;
+          await autoTranslateGeneric(strapi, 'api::footer.footer', event.result.documentId, 'bn-BD', {
+            textFields: [
+              'description', 'newsletterText', 'appDescription',
+              'newsletterPlaceholder', 'newsletterButtonText',
+              'categoryTitle', 'recentPostTitle', 'copyrightText',
+              'socialTitle', 'editorialName', 'editorialOffice',
+              'editorialAddress1', 'editorialAddress2', 'editorialPhone',
+              'editorialEmail', 'editorialEditor', 'editorialPublisher',
+              'noMenuItemsText',
+            ],
+          });
+        },
+      });
+
+    } else {
+      strapi.log.info('Auto-translate: disabled (set GOOGLE_TRANSLATE_API_KEY + AUTO_TRANSLATE_ENABLED=true to enable)');
+    }
   },
 };
+
+// ─── Generic auto-translate helper ───────────────────────────────────────────
+// Fetches a document in bn-BD locale, translates the specified fields,
+// then creates or updates the English locale version.
+async function autoTranslateGeneric(
+  strapi: Core.Strapi,
+  uid: string,
+  documentId: string,
+  sourceLocale: string,
+  options: {
+    textFields?: string[];
+    htmlFields?: string[];
+    /** If set, a slug is generated from the translated value of this field */
+    slugSourceField?: string;
+    /** The name of the slug field in the schema (default: 'slug') */
+    slugField?: string;
+  },
+) {
+  if (!documentId) return;
+  const { textFields = [], htmlFields = [], slugSourceField, slugField = 'slug' } = options;
+
+  try {
+    const full = await strapi.documents(uid as any).findOne({
+      documentId,
+      locale: sourceLocale,
+    } as any);
+    if (!full) return;
+
+    const allFields: Record<string, string | undefined | null> = {};
+    for (const f of [...textFields, ...htmlFields]) {
+      allFields[f] = full[f] ?? null;
+    }
+
+    const translated = await translateFields(allFields, htmlFields);
+
+    if (slugSourceField && translated[slugSourceField]) {
+      translated[slugField] = slugify(translated[slugSourceField]);
+    }
+
+    const existing = await strapi.documents(uid as any).findOne({
+      documentId,
+      locale: 'en',
+    } as any).catch(() => null);
+
+    const payload: any = { documentId, locale: 'en', data: translated };
+
+    if (existing) {
+      await strapi.documents(uid as any).update(payload);
+    } else {
+      await strapi.documents(uid as any).create(payload);
+    }
+
+    const label = full[slugSourceField || textFields[0]] || documentId;
+    strapi.log.info(`Auto-translate: ${existing ? 'updated' : 'created'} English locale for ${uid.split('::')[1]} "${label}"`);
+  } catch (err: any) {
+    strapi.log.error(`Auto-translate: failed for ${uid} ${documentId} — ${err?.message}`);
+  }
+}
+
+// ─── Article-specific auto-translate ─────────────────────────────────────────
+async function autoTranslateArticleToEnglish(strapi: Core.Strapi, bnArticle: any) {
+  const documentId: string = bnArticle?.documentId;
+  if (!documentId) return;
+
+  try {
+    // Fetch full article data (lifecycle event may have partial fields)
+    const full = await strapi.documents('api::article.article' as any).findOne({
+      documentId,
+      locale: 'bn-BD',
+      status: 'published',
+      populate: { seo: true },
+    } as any);
+
+    if (!full) return;
+
+    strapi.log.info(`Auto-translate: translating article "${full.title}" (${documentId}) to English…`);
+
+    const translated = await translateArticle({
+      title: full.title,
+      excerpt: full.excerpt,
+      content: full.content,
+      seo: full.seo,
+    });
+
+    // Check if an English locale entry already exists
+    const existing = await strapi.documents('api::article.article' as any).findOne({
+      documentId,
+      locale: 'en',
+      status: 'published',
+    } as any).catch(() => null);
+
+    const payload = {
+      documentId,
+      locale: 'en',
+      status: 'published',
+      data: {
+        ...translated,
+        // Preserve non-translatable fields from the Bengali source
+        cover: full.cover,
+        category: full.category,
+        author: full.author,
+        videoUrl: full.videoUrl,
+        isTopNews: full.isTopNews,
+        isHeadline: full.isHeadline,
+        isTopSlider: full.isTopSlider,
+        isMiddleSlider: full.isMiddleSlider,
+        isMostRead: full.isMostRead,
+        isPopularNews: full.isPopularNews,
+        isTechInnovation: full.isTechInnovation,
+        isEditorsChoice: full.isEditorsChoice,
+        isRecentPost: full.isRecentPost,
+        isRecentReview: full.isRecentReview,
+      },
+    } as any;
+
+    if (existing) {
+      await strapi.documents('api::article.article' as any).update(payload);
+      strapi.log.info(`Auto-translate: updated English locale for "${translated.title}"`);
+    } else {
+      await strapi.documents('api::article.article' as any).create(payload);
+      strapi.log.info(`Auto-translate: created English locale for "${translated.title}"`);
+    }
+  } catch (err: any) {
+    strapi.log.error(`Auto-translate: failed for article ${documentId} — ${err?.message}`);
+  }
+}

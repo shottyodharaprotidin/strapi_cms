@@ -118,6 +118,14 @@ yarn-error.log
 coverage
 
 ############################
+# Docker
+############################
+
+Dockerfile
+Dockerfile.dev
+docker-compose*.yml
+
+############################
 # Strapi
 ############################
 
