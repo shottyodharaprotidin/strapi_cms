@@ -3,6 +3,8 @@ FROM node:20-bullseye-slim
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+# Copy scripts before npm ci so postinstall (patch-bangla-locale.js) can run
+COPY scripts/ ./scripts/
 RUN npm ci
 
 # Copy full project
