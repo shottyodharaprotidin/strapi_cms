@@ -203,7 +203,6 @@ export default factories.createCoreController('api::article.article', ({ strapi 
           removed: false,
           approvalStatus: 'PENDING',
           threadOf: parentCommentId,
-          locale: locale || null,
         },
       });
 

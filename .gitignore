@@ -121,8 +121,6 @@ coverage
 # Docker
 ############################
 
-Dockerfile
-Dockerfile.dev
 docker-compose*.yml
 
 ############################

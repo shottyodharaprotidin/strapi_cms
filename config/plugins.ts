@@ -40,7 +40,7 @@ export default ({ env }) => {
     },
   },
   comments: {
-    enabled: !localLiteMode && !!env('DATABASE_HOST'), // only in production (postgres)
+    enabled: !localLiteMode,
     config: {
       badWords: false,
       moderatorRoles: ['Authenticated'],

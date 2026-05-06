@@ -1,0 +1,17 @@
+FROM node:20-bullseye
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm install
+
+COPY . .
+
+RUN rm -rf dist build .cache
+
+ENV NODE_ENV=development
+ENV SKIP_TS=true
+ENV STRAPI_DISABLE_TYPESCRIPT=true
+
+EXPOSE 1337
+CMD ["npm", "run", "develop"]
