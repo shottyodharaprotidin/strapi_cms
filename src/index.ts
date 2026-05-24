@@ -558,6 +558,7 @@ export default {
               'editorialEmail', 'editorialEditor', 'editorialPublisher',
               'noMenuItemsText',
             ],
+            skipExistingFields: true,
           });
         },
         async afterUpdate(event) {
@@ -572,6 +573,7 @@ export default {
               'editorialEmail', 'editorialEditor', 'editorialPublisher',
               'noMenuItemsText',
             ],
+            skipExistingFields: true,
           });
         },
       });
@@ -597,10 +599,16 @@ async function autoTranslateGeneric(
     slugSourceField?: string;
     /** The name of the slug field in the schema (default: 'slug') */
     slugField?: string;
+    /**
+     * When true, any field that already has a non-empty value in the English
+     * locale is skipped — preserving manual edits while still auto-translating
+     * fields that have never been set.
+     */
+    skipExistingFields?: boolean;
   },
 ) {
   if (!documentId) return;
-  const { textFields = [], htmlFields = [], slugSourceField, slugField = 'slug' } = options;
+  const { textFields = [], htmlFields = [], slugSourceField, slugField = 'slug', skipExistingFields = false } = options;
 
   try {
     const full = await strapi.documents(uid as any).findOne({
@@ -609,21 +617,40 @@ async function autoTranslateGeneric(
     } as any);
     if (!full) return;
 
-    const allFields: Record<string, string | undefined | null> = {};
-    for (const f of [...textFields, ...htmlFields]) {
-      allFields[f] = full[f] ?? null;
-    }
-
-    const translated = await translateFields(allFields, htmlFields);
-
-    if (slugSourceField && translated[slugSourceField]) {
-      translated[slugField] = slugify(translated[slugSourceField]);
-    }
-
+    // When skipExistingFields is enabled, fetch the current English entry first
+    // so we can skip any field that already has a manually-set value.
+    let existingEnFields: Record<string, any> = {};
     const existing = await strapi.documents(uid as any).findOne({
       documentId,
       locale: 'en',
     } as any).catch(() => null);
+
+    if (skipExistingFields && existing) {
+      existingEnFields = existing as Record<string, any>;
+    }
+
+    const activeTextFields = textFields.filter(
+      f => !skipExistingFields || !existingEnFields[f]
+    );
+    const activeHtmlFields = htmlFields.filter(
+      f => !skipExistingFields || !existingEnFields[f]
+    );
+
+    if (activeTextFields.length === 0 && activeHtmlFields.length === 0) {
+      strapi.log.info(`Auto-translate: all fields already set for ${uid.split('::')[1]} ${documentId} — skipping`);
+      return;
+    }
+
+    const allFields: Record<string, string | undefined | null> = {};
+    for (const f of [...activeTextFields, ...activeHtmlFields]) {
+      allFields[f] = full[f] ?? null;
+    }
+
+    const translated = await translateFields(allFields, activeHtmlFields);
+
+    if (slugSourceField && translated[slugSourceField]) {
+      translated[slugField] = slugify(translated[slugSourceField]);
+    }
 
     const payload: any = { documentId, locale: 'en', data: translated };
 

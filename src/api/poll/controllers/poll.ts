@@ -10,8 +10,6 @@ export default factories.createCoreController('api::poll.poll', ({ strapi }) => 
         const { id } = ctx.params;
         const { optionIndex } = ctx.request.body;
         
-        console.log(`Voting for poll ${id}, option index: ${optionIndex}`);
-  
         if (optionIndex === undefined || optionIndex === null) {
           return ctx.badRequest('optionIndex is required');
         }
@@ -39,28 +37,23 @@ export default factories.createCoreController('api::poll.poll', ({ strapi }) => 
           status: 'published' // Make sure we get published ones
         });
 
-        console.log(`Poll ID: ${id}. Found ${allLocales.length} localized versions.`);
-        allLocales.forEach(l => console.log(` - Locale: ${l.locale}, Options Count: ${l.options?.length}`));
+        strapi.log.debug(`Poll ${id}: found ${allLocales.length} localized versions`);
 
         let updatedEntryForCurrentLocale = null;
 
         for (const p of allLocales) {
-          console.log(`Syncing locale: ${p.locale} (Option Index: ${idx})`);
           
           // Sync by index: only update if the locale has enough options
           if (!p.options || idx >= p.options.length) {
-            console.log(` ! Skipping locale ${p.locale}: options length is ${p.options?.length || 0}`);
             continue;
           }
 
           const updatedOptions = p.options.map((opt: any, index: number) => {
             const currentCount = Number(opt.voteCount) || 0;
             if (index === idx) {
-              const newVoteCount = currentCount + 1;
-              console.log(`   + Index ${idx} in ${p.locale}: ${currentCount} -> ${newVoteCount}`);
               return {
                 text: opt.text,
-                voteCount: newVoteCount 
+                voteCount: currentCount + 1,
               };
             }
             return {
@@ -96,7 +89,7 @@ export default factories.createCoreController('api::poll.poll', ({ strapi }) => 
 
         return { data: updatedEntryForCurrentLocale };
       } catch (err) {
-        console.error('Error in vote controller:', err);
+        strapi.log.error('Poll vote error:', err);
         ctx.throw(500, err.message || 'Internal Server Error');
       }
     },

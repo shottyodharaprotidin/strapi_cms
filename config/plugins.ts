@@ -24,7 +24,7 @@ export default ({ env }) => {
     },
     config: {
       provider: 'local',
-      sizeLimit: 1024 * 1024 * 1024, // 1GB (Super high limit to simulate no limit)
+      sizeLimit: 256 * 1024 * 1024, // 256 MB
       providerOptions: {
         // using Strapi's built-in local provider (uploads go to /public/uploads)
       },

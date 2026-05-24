@@ -39,18 +39,17 @@ export default [
     },
   },
   'strapi::cors',
-  'strapi::poweredBy',
   'strapi::query',
   {
     name: 'strapi::body',
     config: {
-      formLimit: '1024mb',
-      jsonLimit: '1024mb',
-      textLimit: '1024mb',
+      formLimit: '256mb',
+      jsonLimit: '10mb',
+      textLimit: '10mb',
       formidable: {
-        maxFileSize: 1024 * 1024 * 1024, // 1GB max file size
-        maxFieldsSize: 1024 * 1024 * 1024,
-        maxFields: 1000,
+        maxFileSize: 256 * 1024 * 1024, // 256 MB
+        maxFieldsSize: 256 * 1024 * 1024,
+        maxFields: 200,
         keepExtensions: true,
       },
     },
