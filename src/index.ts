@@ -654,11 +654,9 @@ async function autoTranslateGeneric(
 
     const payload: any = { documentId, locale: 'en', data: translated };
 
-    if (existing) {
-      await strapi.documents(uid as any).update(payload);
-    } else {
-      await strapi.documents(uid as any).create(payload);
-    }
+    // update() creates the 'en' locale if it doesn't exist yet, and updates it
+    // otherwise — always under the same documentId as the source locale.
+    await strapi.documents(uid as any).update(payload);
 
     const label = full[slugSourceField || textFields[0]] || documentId;
     strapi.log.info(`Auto-translate: ${existing ? 'updated' : 'created'} English locale for ${uid.split('::')[1]} "${label}"`);
@@ -678,7 +676,7 @@ async function autoTranslateArticleToEnglish(strapi: Core.Strapi, bnArticle: any
       documentId,
       locale: 'bn-BD',
       status: 'published',
-      populate: { seo: true },
+      populate: { seo: true, cover: true, category: true, author: true },
     } as any);
 
     if (!full) return;
@@ -691,13 +689,6 @@ async function autoTranslateArticleToEnglish(strapi: Core.Strapi, bnArticle: any
       content: full.content,
       seo: full.seo,
     });
-
-    // Check if an English locale entry already exists
-    const existing = await strapi.documents('api::article.article' as any).findOne({
-      documentId,
-      locale: 'en',
-      status: 'published',
-    } as any).catch(() => null);
 
     const payload = {
       documentId,
@@ -723,13 +714,10 @@ async function autoTranslateArticleToEnglish(strapi: Core.Strapi, bnArticle: any
       },
     } as any;
 
-    if (existing) {
-      await strapi.documents('api::article.article' as any).update(payload);
-      strapi.log.info(`Auto-translate: updated English locale for "${translated.title}"`);
-    } else {
-      await strapi.documents('api::article.article' as any).create(payload);
-      strapi.log.info(`Auto-translate: created English locale for "${translated.title}"`);
-    }
+    // update() creates the 'en' locale if it doesn't exist yet, and updates it
+    // otherwise — always under the same documentId as the Bengali source.
+    await strapi.documents('api::article.article' as any).update(payload);
+    strapi.log.info(`Auto-translate: synced English locale for "${translated.title}"`);
   } catch (err: any) {
     strapi.log.error(`Auto-translate: failed for article ${documentId} — ${err?.message}`);
   }
